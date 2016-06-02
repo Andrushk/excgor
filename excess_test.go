@@ -52,3 +52,23 @@ func TestOne(t *testing.T) {
 	}
 }
 
+func TestFiveTogether(t *testing.T) {
+	ex := new(Excess)
+	ex.SetMax(5)
+	counter := new(int32)
+	quit := make(chan bool)
+	//wait := make(chan bool)
+
+	const realN = 5
+	for i := 0; i < realN; i++ {
+		go realRun(t, ex, counter, quit)
+	}
+
+	for i:=0; i< realN; i++{
+		quit <- true
+	}
+
+	if *counter != 5 {
+		t.Errorf("check sum is wrong: %d is not 5", *counter)
+	}
+}
