@@ -14,7 +14,7 @@ type Excess struct {
 	maxProcess uint32
 }
 
-func (e Excess) Do(f func()) bool {
+func (e *Excess) Do(f func()) bool {
 	if !e.addProcess() {
 		return false
 	}
@@ -25,14 +25,14 @@ func (e Excess) Do(f func()) bool {
 	return true
 }
 
-func (e Excess) SetMax(value uint32) {
+func (e *Excess) SetMax(value uint32) {
 	e.m.Lock()
 	defer e.m.Unlock()
 
 	e.maxProcess = value
 }
 
-func (e Excess) addProcess() bool {
+func (e *Excess) addProcess() bool {
 	e.m.Lock()
 	defer e.m.Unlock()
 
@@ -44,7 +44,7 @@ func (e Excess) addProcess() bool {
 	return true
 }
 
-func (e Excess) oddProcess() {
+func (e *Excess) oddProcess() {
 	e.m.Lock()
 	defer e.m.Unlock()
 
@@ -54,10 +54,17 @@ func (e Excess) oddProcess() {
 	e.inProcess -= 1
 }
 
-func (e Excess) getRealMax() uint32 {
+func (e *Excess) getRealMax() uint32 {
 	//если maxProcess не инициализирован, то считаем его равным 1
 	if e.maxProcess <= 1 {
 		return 1
 	}
 	return e.maxProcess
 }
+
+// Prints debug info if DebugMode is set.
+//func debug(m string, v interface{}) {
+//	if debugMode {
+//		log.Printf(m+":%+v", v)
+//	}
+//}
