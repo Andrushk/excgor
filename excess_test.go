@@ -2,60 +2,53 @@ package excgor
 
 import (
 	"testing"
-	"log"
+	"sync/atomic"
 )
 
-func run(t *testing.T, ex *Excess, result chan int, status chan bool) {
+func realRun(t *testing.T, ex *Excess, counter *int32, quit chan bool) {
 	isExecuted := ex.Do(func() {
-		//log.Println("ENTERED!")
-		//select {
-		//case <-result:
-		//	return
-		//}
-		result <- 1
+		atomic.AddInt32(counter, 1)
+		<-quit
 	})
 
-	status <- isExecuted
+	if !isExecuted {
+		t.Errorf("expected instance did not execute")
+	}
+}
+
+func excessRun(t *testing.T, ex *Excess, counter *int32, wait chan bool) {
+	isExecuted := ex.Do(func() {
+		atomic.AddInt32(counter, 1)
+	})
+
+	if isExecuted {
+		t.Errorf("excess instance should not work")
+	}
+
+	wait <- true
 }
 
 func TestOne(t *testing.T) {
 	ex := new(Excess)
-	result := make(chan int)
-	status := make(chan bool)
+	counter := new(int32)
+	quit := make(chan bool)
+	wait := make(chan bool)
+
+	go realRun(t, ex, counter, quit)
 
 	const n = 10
 	for i := 0; i < n; i++ {
-		go run(t, ex, result, status)
+		go excessRun(t, ex, counter, wait)
 	}
 
-	totalExcess := 0
 	for i := 0; i < n; i++ {
-		isExecuted, ok := <-status
-
-		log.Printf("isExecuted=%v, ok=%v", isExecuted, ok)
-
-		if !ok {
-			break
-		}
-
-		if isExecuted {
-			continue
-		}
-
-		totalExcess++
+		<-wait
 	}
 
-	totalExecuted := n - totalExcess
-	if totalExecuted != 1 {
-		t.Errorf("too many executed instances: %d is not 1", totalExecuted)
+	quit <- true
+
+	if *counter != 1 {
+		t.Errorf("more than one instance was executed: %d is not 1", *counter)
 	}
-
-	//result<-1
-	log.Println("Aaaaaaaaaa")
-	<-result
-	<-status
-
-	//if *counter != 1 {
-	//	t.Errorf("once failed outside run: %d is not 1", *counter)
-	//}
 }
+
