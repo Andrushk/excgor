@@ -5,13 +5,17 @@ import (
 	"sync/atomic"
 )
 
-func realRun(t *testing.T, ex *Excess, counter *int32, quit chan bool) {
+func realRun(t *testing.T, ex *Excess, counter *int32, start, quit chan bool) {
 	isExecuted := ex.Do(func() {
+		start <- true
 		atomic.AddInt32(counter, 1)
+		t.Log("counter added")
 		<-quit
-	})
 
-	if !isExecuted {
+	})
+	t.Log("realRun ended")
+
+	if isExecuted {
 		t.Errorf("expected instance did not execute")
 	}
 }
@@ -28,47 +32,125 @@ func excessRun(t *testing.T, ex *Excess, counter *int32, wait chan bool) {
 	wait <- true
 }
 
-func TestOne(t *testing.T) {
+func TestWithoutExcess(t *testing.T) {
 	ex := new(Excess)
-	counter := new(int32)
+
+	if ex.inProcess != 0 {
+		t.Fatalf("inProcess should be 0, actual %v", ex.inProcess)
+	}
+
+	if ex.getRealMax() != 1 {
+		t.Fatalf("getRealMax should be 1, actual %v", ex.getRealMax)
+	}
+
+	isProcessed := false
+	start := make(chan bool)
 	quit := make(chan bool)
-	wait := make(chan bool)
+	go func() {
+		isExecuted := ex.Do(func() {
+			start <- true
+			isProcessed = true
+			<-quit
 
-	go realRun(t, ex, counter, quit)
+			//select {
+			//case <-quit:
+			//	return
+			//}
+			//t.Log("exit from do")
+		})
 
-	const n = 10
-	for i := 0; i < n; i++ {
-		go excessRun(t, ex, counter, wait)
+		t.Log("exit from do normal")
+
+		if !isExecuted {
+			t.Errorf("expected instance did not execute")
+		}
+	}()
+
+
+	// wait until instance will start
+	<-start
+
+	if ex.inProcess != 1 {
+		t.Fatalf("inProcess should be 1, actual %v", ex.inProcess)
 	}
 
-	for i := 0; i < n; i++ {
-		<-wait
+	if ex.getRealMax() != 1 {
+		t.Fatalf("getRealMax should be 1, actual %v", ex.getRealMax)
 	}
 
+	// finish instance
 	quit <- true
 
-	if *counter != 1 {
-		t.Errorf("more than one instance was executed: %d is not 1", *counter)
+	if !isProcessed {
+		t.Fatalf("isProcessed should be true, actual %v", isProcessed)
+	}
+
+	if ex.inProcess != 0 {
+		t.Fatalf("inProcess should be 0, actual %v", ex.inProcess)
+	}
+
+	if ex.getRealMax() != 1 {
+		t.Fatalf("getRealMax should be 1, actual %v", ex.getRealMax)
 	}
 }
 
-func TestFiveTogether(t *testing.T) {
-	ex := new(Excess)
-	ex.SetMax(5)
-	counter := new(int32)
-	quit := make(chan bool)
-	//wait := make(chan bool)
 
-	const realN = 5
-	for i := 0; i < realN; i++ {
-		go realRun(t, ex, counter, quit)
-	}
+//func TestOne(t *testing.T) {
+//	ex := new(Excess)
+//	counter := new(int32)
+//	start := make(chan bool)
+//	quit := make(chan bool)
+//	wait := make(chan bool)
+//
+//	go realRun(t, ex, counter, start, quit)
+//
+//	// wait until right instance will start
+//	<-start
+//
+//	//provoke to execute more than one instance at the same time
+//	const n = 10
+//	for i := 0; i < n; i++ {
+//		go excessRun(t, ex, counter, wait)
+//	}
+//
+//	for i := 0; i < n; i++ {
+//		<-wait
+//	}
+//
+//	quit <- true
+//
+//	if *counter != 1 {
+//		t.Errorf("more than one instance was executed: %d is not 1", *counter)
+//	}
+//}
 
-	for i:=0; i< realN; i++{
-		quit <- true
-	}
-
-	if *counter != 5 {
-		t.Errorf("check sum is wrong: %d is not 5", *counter)
-	}
-}
+//func TestFiveTogether(t *testing.T) {
+//	ex := new(Excess)
+//	ex.SetMax(5)
+//	counter := new(int32)
+//	quit := make(chan bool)
+//	wait := make(chan bool)
+//
+//	const realN = 5
+//	for i := 0; i < realN; i++ {
+//		go realRun(t, ex, counter, quit)
+//	}
+//
+//	//provoke to execute more than five instance at the same time
+//	const excessN = 10
+//	for i := 0; i < excessN; i++ {
+//		go excessRun(t, ex, counter, wait)
+//	}
+//
+//	for i := 0; i < excessN; i++ {
+//		<-wait
+//	}
+//
+//	for i:=0; i< realN; i++{
+//		quit <- true
+//	}
+//
+//	if *counter != 5 {
+//		t.Errorf("check sum is wrong: %d is not 5", *counter)
+//	}
+//}
