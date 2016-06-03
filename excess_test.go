@@ -158,3 +158,29 @@ func TestFiveSameTime(t *testing.T) {
 		<-waitRoot
 	}
 }
+
+// Test several serial takes and releases
+func TestRelease(t *testing.T){
+	ex := new(Excess)
+	ex.SetMax(2)
+	counter := new(int32)
+	waitRoot := make(chan bool)
+	quit := make(chan bool)
+
+	go realRun(t, ex, counter, waitRoot, quit)
+	<-waitRoot
+
+	go realRun(t, ex, counter, waitRoot, quit)
+	<-waitRoot
+
+	if ex.inProcess != 2 {
+		t.Errorf("inProcess should be %d, actual %d", 2, ex.inProcess)
+	}
+
+	// Only one release
+	quit <- true
+
+	if ex.inProcess != 2 {
+		t.Errorf("inProcess should be %d, actual %d", 2, ex.inProcess)
+	}
+}
