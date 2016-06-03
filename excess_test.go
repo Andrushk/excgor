@@ -115,33 +115,46 @@ func TestOneAndManyExcess(t *testing.T) {
 	<-waitRoot
 }
 
-//func TestFiveTogether(t *testing.T) {
-//	ex := new(Excess)
-//	ex.SetMax(5)
-//	counter := new(int32)
-//	quit := make(chan bool)
-//	wait := make(chan bool)
-//
-//	const realN = 5
-//	for i := 0; i < realN; i++ {
-//		go realRun(t, ex, counter, quit)
-//	}
-//
-//	//provoke to execute more than five instance at the same time
-//	const excessN = 10
-//	for i := 0; i < excessN; i++ {
-//		go excessRun(t, ex, counter, wait)
-//	}
-//
-//	for i := 0; i < excessN; i++ {
-//		<-wait
-//	}
-//
-//	for i:=0; i< realN; i++{
-//		quit <- true
-//	}
-//
-//	if *counter != 5 {
-//		t.Errorf("check sum is wrong: %d is not 5", *counter)
-//	}
-//}
+// Test many work instance and many excess
+func TestFiveSameTime(t *testing.T) {
+	ex := new(Excess)
+	ex.SetMax(5)
+	counter := new(int32)
+	waitRoot := make(chan bool)
+	quit := make(chan bool)
+	wait := make(chan bool)
+
+	const realN = 5
+	for i := 0; i < realN; i++ {
+		go realRun(t, ex, counter, waitRoot, quit)
+
+		// wait until right instance will start
+		<-waitRoot
+
+		if ex.inProcess != uint32(i+1) {
+			t.Errorf("inProcess should be %d, actual %d", i+1, ex.inProcess)
+		}
+	}
+
+	//provoke to execute more than five instance at the same time
+	const excessN = 10
+	for i := 0; i < excessN; i++ {
+		go excessRun(t, ex, counter, wait)
+	}
+	for i := 0; i < excessN; i++ {
+		<-wait
+	}
+
+	for i:=0; i< realN; i++{
+		quit <- true
+	}
+
+	if *counter != 5 {
+		t.Errorf("check sum is wrong: %d is not 5", *counter)
+	}
+
+	// wait until right instance will finish
+	for i:=0;i<realN;i++{
+		<-waitRoot
+	}
+}
