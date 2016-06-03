@@ -5,19 +5,19 @@ import (
 	"sync/atomic"
 )
 
-func realRun(t *testing.T, ex *Excess, counter *int32, start, quit chan bool) {
+func realRun(t *testing.T, ex *Excess, counter *int32, waitRoot, quit chan bool) {
+	waitRoot <- true
+
 	isExecuted := ex.Do(func() {
-		start <- true
 		atomic.AddInt32(counter, 1)
-		t.Log("counter added")
 		<-quit
-
 	})
-	t.Log("realRun ended")
 
-	if isExecuted {
+	if !isExecuted {
 		t.Errorf("expected instance did not execute")
 	}
+
+	waitRoot <- true
 }
 
 func excessRun(t *testing.T, ex *Excess, counter *int32, wait chan bool) {
@@ -32,6 +32,7 @@ func excessRun(t *testing.T, ex *Excess, counter *int32, wait chan bool) {
 	wait <- true
 }
 
+// Test only one instance without excess
 func TestWithoutExcess(t *testing.T) {
 	ex := new(Excess)
 
@@ -44,22 +45,20 @@ func TestWithoutExcess(t *testing.T) {
 	}
 
 	isProcessed := false
-	start := make(chan bool)
 	quit := make(chan bool)
 	go func() {
 		isExecuted := ex.Do(func() {
-			start <- true
 			isProcessed = true
-			<-quit
 
-			//select {
-			//case <-quit:
-			//	return
-			//}
-			//t.Log("exit from do")
+			if ex.inProcess != 1 {
+				t.Fatalf("inProcess should be 1, actual %v", ex.inProcess)
+			}
+			if ex.getRealMax() != 1 {
+				t.Fatalf("getRealMax should be 1, actual %v", ex.getRealMax)
+			}
 		})
 
-		t.Log("exit from do normal")
+		<-quit
 
 		if !isExecuted {
 			t.Errorf("expected instance did not execute")
@@ -67,18 +66,7 @@ func TestWithoutExcess(t *testing.T) {
 	}()
 
 
-	// wait until instance will start
-	<-start
-
-	if ex.inProcess != 1 {
-		t.Fatalf("inProcess should be 1, actual %v", ex.inProcess)
-	}
-
-	if ex.getRealMax() != 1 {
-		t.Fatalf("getRealMax should be 1, actual %v", ex.getRealMax)
-	}
-
-	// finish instance
+	// wait when instance will finish
 	quit <- true
 
 	if !isProcessed {
@@ -94,35 +82,38 @@ func TestWithoutExcess(t *testing.T) {
 	}
 }
 
+// Test one work instance and many excess
+func TestOneAndManyExcess(t *testing.T) {
+	ex := new(Excess)
+	counter := new(int32)
+	waitRoot := make(chan bool)
+	quit := make(chan bool)
+	wait := make(chan bool)
 
-//func TestOne(t *testing.T) {
-//	ex := new(Excess)
-//	counter := new(int32)
-//	start := make(chan bool)
-//	quit := make(chan bool)
-//	wait := make(chan bool)
-//
-//	go realRun(t, ex, counter, start, quit)
-//
-//	// wait until right instance will start
-//	<-start
-//
-//	//provoke to execute more than one instance at the same time
-//	const n = 10
-//	for i := 0; i < n; i++ {
-//		go excessRun(t, ex, counter, wait)
-//	}
-//
-//	for i := 0; i < n; i++ {
-//		<-wait
-//	}
-//
-//	quit <- true
-//
-//	if *counter != 1 {
-//		t.Errorf("more than one instance was executed: %d is not 1", *counter)
-//	}
-//}
+	go realRun(t, ex, counter, waitRoot, quit)
+
+	// wait until right instance will start
+	<-waitRoot
+
+	//provoke to execute more than one instance at the same time
+	const n = 10
+	for i := 0; i < n; i++ {
+		go excessRun(t, ex, counter, wait)
+	}
+
+	for i := 0; i < n; i++ {
+		<-wait
+	}
+
+	quit <- true
+
+	if *counter != 1 {
+		t.Errorf("more than one instance was executed: %d is not 1", *counter)
+	}
+
+	// wait until right instance will finish
+	<-waitRoot
+}
 
 //func TestFiveTogether(t *testing.T) {
 //	ex := new(Excess)

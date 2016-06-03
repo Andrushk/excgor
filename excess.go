@@ -2,7 +2,6 @@ package excgor
 
 import (
 	"sync"
-	"log"
 )
 
 type Excess struct {
@@ -17,18 +16,13 @@ type Excess struct {
 
 
 func (e *Excess) Do(f func()) bool {
-	//if !e.addProcess() {
-	//	return false
-	//}
-	e.inProcess++
+	if !e.addProcess() {
+		return false
+	}
 
 	f()
 
-	e.inProcess--
-	//log.Println("before odd")
-	//e.oddProcess()
-	//log.Println("process odded")
-
+	e.oddProcess()
 	return true
 }
 
@@ -40,8 +34,8 @@ func (e *Excess) SetMax(value uint32) {
 }
 
 func (e *Excess) addProcess() bool {
-	//e.m.Lock()
-	//defer e.m.Unlock()
+	e.m.Lock()
+	defer e.m.Unlock()
 
 	if e.inProcess >= e.getRealMax() {
 		return false
@@ -52,12 +46,8 @@ func (e *Excess) addProcess() bool {
 }
 
 func (e *Excess) oddProcess() {
-	log.Println("start odding")
-
-	//e.m.Lock()
-	//defer e.m.Unlock()
-
-	log.Println("insaid odd")
+	e.m.Lock()
+	defer e.m.Unlock()
 
 	if e.inProcess < 1 {
 		return
